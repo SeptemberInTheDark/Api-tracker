@@ -1,0 +1,413 @@
+openapi: 3.0.3
+info:
+  title: Api Tracker
+  version: 1.0.0
+  description: API модуля трекера задач для медицинского персонала.
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/v1/tasks:
+    get:
+      summary: List task occurrences for a finite date window
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+          example: "2026-06-01"
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+          example: "2026-06-30"
+        - in: query
+          name: status[]
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/TaskStatus"
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: Occurrence list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TaskOccurrence"
+                  meta:
+                    $ref: "#/components/schemas/ListMeta"
+    post:
+      summary: Create task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task]
+              properties:
+                task:
+                  $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/tasks/{id}:
+    get:
+      summary: Get base task by ID
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Update base task
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task]
+              properties:
+                task:
+                  $ref: "#/components/schemas/TaskInput"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      summary: Delete task
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "204":
+          description: Deleted
+  /api/v1/tasks/{task_id}/occurrences/{date}:
+    patch:
+      summary: Update one occurrence without changing the series
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: date
+          required: true
+          schema:
+            type: string
+            format: date
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [occurrence]
+              properties:
+                occurrence:
+                  $ref: "#/components/schemas/OccurrenceOverrideInput"
+      responses:
+        "200":
+          description: Occurrence updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TaskOccurrence"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/tags:
+    get:
+      summary: List tags
+      responses:
+        "200":
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Tag"
+    post:
+      summary: Create custom tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag]
+              properties:
+                tag:
+                  type: object
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Tag"
+  /api/v1/tags/{id}:
+    patch:
+      summary: Update custom tag
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag]
+              properties:
+                tag:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+      responses:
+        "200":
+          description: Updated
+        "422":
+          description: Locked tags cannot be changed
+    delete:
+      summary: Delete custom tag
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "422":
+          description: Locked tags cannot be deleted
+  /api/v1/tasks/{id}/tags/{tag_id}:
+    post:
+      summary: Attach tag to task
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/TagId"
+      responses:
+        "201":
+          description: Attached
+    delete:
+      summary: Remove tag from task
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/TagId"
+      responses:
+        "200":
+          description: Removed
+components:
+  parameters:
+    TaskId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: integer
+    TagId:
+      in: path
+      name: tag_id
+      required: true
+      schema:
+        type: integer
+  responses:
+    NotFound:
+      description: Resource was not found
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              errors:
+                type: array
+                items:
+                  type: string
+  schemas:
+    TaskStatus:
+      type: string
+      enum: [pending, in_progress, done, cancelled]
+    RecurrenceType:
+      type: string
+      enum: [daily, monthly_day, specific_dates, day_parity]
+    TaskInput:
+      type: object
+      required: [title, description, due_date]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        due_date:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        tag_ids:
+          type: array
+          items:
+            type: integer
+        recurrence_rule_attributes:
+          $ref: "#/components/schemas/RecurrenceRuleInput"
+    RecurrenceRuleInput:
+      type: object
+      properties:
+        recurrence_type:
+          $ref: "#/components/schemas/RecurrenceType"
+        interval:
+          type: integer
+          minimum: 1
+        day_of_month:
+          type: integer
+          minimum: 1
+          maximum: 31
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
+        specific_dates:
+          type: array
+          items:
+            type: string
+            format: date
+        parity:
+          type: string
+          enum: [even, odd]
+    OccurrenceOverrideInput:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        title:
+          type: string
+        description:
+          type: string
+        due_time:
+          type: string
+          example: "14:30"
+        cancelled:
+          type: boolean
+    TaskEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Task"
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        due_date:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+        recurrence_rule:
+          $ref: "#/components/schemas/RecurrenceRuleInput"
+    TaskOccurrence:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "42:2026-06-01"
+        task_id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        occurrence_date:
+          type: string
+          format: date
+        due_time:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        recurring:
+          type: boolean
+        detached:
+          type: boolean
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+    Tag:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        locked:
+          type: boolean
+    ListMeta:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        count:
+          type: integer
